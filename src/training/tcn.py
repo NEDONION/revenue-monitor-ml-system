@@ -1,4 +1,6 @@
 import json
+from datetime import datetime
+import time
 import logging
 import os
 from dataclasses import dataclass
@@ -231,27 +233,36 @@ def train_tcn(config_path: Path) -> None:
     use_wandb = bool(os.environ.get("WANDB_PROJECT")) and wandb is not None
     run = None
     if use_wandb:
+        run_name = os.environ.get("WANDB_RUN_NAME") or datetime.now().strftime("run-%Y%m%d-%H%M%S")
         run = wandb.init(
             project=os.environ.get("WANDB_PROJECT"),
             entity=os.environ.get("WANDB_ENTITY"),
-            name=os.environ.get("WANDB_RUN_NAME"),
+            name=run_name,
             mode=os.environ.get("WANDB_MODE", "online"),
             config=vars(config),
         )
 
-    logging.info("开始训练：epochs=%d, batch=%d", config.epochs, config.batch_size)
+    logging.info(
+        "开始训练：epochs=%d, batch=%d, train_batches=%d, val_batches=%d",
+        config.epochs,
+        config.batch_size,
+        len(train_loader),
+        len(val_loader),
+    )
     model.train()
     best_val = float("inf")
     best_state = None
     patience = 0
     for epoch in range(config.epochs):
+        epoch_start = time.time()
         start_time = torch.cuda.Event(enable_timing=True) if torch.cuda.is_available() else None
         end_time = torch.cuda.Event(enable_timing=True) if torch.cuda.is_available() else None
         if start_time is not None:
             start_time.record()
         total_loss = 0.0
         total_samples = 0
-        for x, y in train_loader:
+        log_interval = max(1, len(train_loader) // 5)
+        for batch_idx, (x, y) in enumerate(train_loader, start=1):
             x = x.to(device)
             y = y.to(device)
             optimizer.zero_grad()
@@ -263,6 +274,16 @@ def train_tcn(config_path: Path) -> None:
             optimizer.step()
             total_loss += loss.item() * x.size(0)
             total_samples += x.size(0)
+            if batch_idx % log_interval == 0 or batch_idx == len(train_loader):
+                avg_loss = total_loss / max(1, total_samples)
+                logging.info(
+                    "Epoch %d/%d - train batch %d/%d - avg_loss: %.6f",
+                    epoch + 1,
+                    config.epochs,
+                    batch_idx,
+                    len(train_loader),
+                    avg_loss,
+                )
         avg_loss = total_loss / len(train_dataset)
 
         # 验证集评估。
@@ -270,11 +291,13 @@ def train_tcn(config_path: Path) -> None:
         val_loss = None
         val_metrics = None
         if len(val_dataset) > 0:
+            logging.info("Epoch %d/%d - 开始验证", epoch + 1, config.epochs)
             val_total = 0.0
             preds_list = []
             targets_list = []
             with torch.no_grad():
-                for x, y in val_loader:
+                val_log_interval = max(1, len(val_loader) // 3)
+                for batch_idx, (x, y) in enumerate(val_loader, start=1):
                     x = x.to(device)
                     y = y.to(device)
                     preds = model(x)
@@ -284,6 +307,14 @@ def train_tcn(config_path: Path) -> None:
                     val_total += loss.item() * x.size(0)
                     preds_list.append(preds.cpu())
                     targets_list.append(y.cpu())
+                    if batch_idx % val_log_interval == 0 or batch_idx == len(val_loader):
+                        logging.info(
+                            "Epoch %d/%d - val batch %d/%d",
+                            epoch + 1,
+                            config.epochs,
+                            batch_idx,
+                            len(val_loader),
+                        )
             val_loss = val_total / len(val_dataset)
             all_preds = torch.cat(preds_list, dim=0)
             all_targets = torch.cat(targets_list, dim=0)
@@ -311,6 +342,12 @@ def train_tcn(config_path: Path) -> None:
             )
         else:
             logging.info("Epoch %d/%d - train: %.6f", epoch + 1, config.epochs, avg_loss)
+        logging.info(
+            "Epoch %d/%d - 用时 %.1fs",
+            epoch + 1,
+            config.epochs,
+            time.time() - epoch_start,
+        )
 
         if use_wandb and run is not None:
             log_payload = {

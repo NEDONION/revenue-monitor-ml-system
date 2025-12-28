@@ -1,0 +1,37 @@
+{
+  "input_dir": "data/processed",
+  "output_dir": "models/tft",
+  "time_column": "ts",
+  "target_column": "metric_value",
+  "group_id_column": "series_id",
+  "static_categoricals": [
+    "site",
+    "currency",
+    "fee_type",
+    "metric_name",
+    "granularity"
+  ],
+  "known_reals": [
+    "local_hour",
+    "day_of_week",
+    "week_of_year",
+    "is_weekend",
+    "is_holiday",
+    "is_promo",
+    "fx_rate_to_usd"
+  ],
+  "unknown_reals": [
+    "metric_value",
+    "tx_count",
+    "avg_value",
+    "gross_value",
+    "net_value"
+  ],
+  "encoder_length": 168,
+  "prediction_length": 24,
+  "quantiles": [0.1, 0.5, 0.9],
+  "max_epochs": 10,
+  "batch_size": 128,
+  "learning_rate": 0.001,
+  "granularity": "hourly"
+}

@@ -41,7 +41,7 @@ export default function ChartCard({ title, tag, stats, points, chartId }: Props)
     <div className="card">
       <div className="card-header">
         <h2>{title}</h2>
-        <span className="tag">{tag}</span>
+        <span className="chip">{tag}</span>
       </div>
       <div className="metrics">
         {stats.map((stat) => (

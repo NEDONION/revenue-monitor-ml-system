@@ -11,6 +11,7 @@
 - `docs/` 方案与设计文档
 - `scripts/` 数据构造与离线任务脚本
 - `data/` 本地数据目录（不提交）
+- `src/models/` 按模型归档的训练/评估/推理实现（如 `tft`、`tcn`）
 
 ## 环境与依赖（uv）
 本项目使用 `uv` 管理依赖，依赖列表统一放在 `requirements.txt`。
@@ -39,9 +40,9 @@ python3 scripts/prepare_dataset.py
 python3 scripts/train_model.py
 ```
 
-## 训练（TCN 时间序列模型）
+## 训练（TFT 时间序列模型）
 ```bash
-python3 scripts/train_tcn.py
+python3 scripts/train_tft.py
 ```
 
 环境变量（可选，开启 W&B 训练可视化）：
@@ -49,14 +50,14 @@ python3 scripts/train_tcn.py
 cp .env.example .env
 ```
 
-## 评估（TCN 时间序列模型）
+## 评估（TFT 时间序列模型）
 ```bash
-python3 scripts/evaluate_tcn.py
+python3 scripts/evaluate_tft.py
 ```
 
-## 推理（TCN 时间序列模型）
+## 推理（TFT 时间序列模型）
 ```bash
-python3 scripts/run_inference.py
+python3 scripts/run_tft_inference.py
 ```
 
 ## 启动控制台与 API

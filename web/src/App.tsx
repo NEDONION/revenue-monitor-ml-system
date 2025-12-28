@@ -1,8 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Topbar from "./components/Topbar";
 import ActionPanel from "./components/ActionPanel";
 import LogPanel from "./components/LogPanel";
-import FileList from "./components/FileList";
 
 type MetricState = {
   train: string;
@@ -51,6 +50,14 @@ const pageMeta = {
   subtitle: "训练、评估与推理的一站式概览。"
 };
 
+function getEvalReportPath(model: string) {
+  return model === "tcn" ? "/reports/tcn_eval.json" : "/reports/tft_eval.json";
+}
+
+function getInferReportPath(model: string) {
+  return model === "tcn" ? "/reports/tcn_inference.json" : "/reports/tft_inference.json";
+}
+
 export default function App() {
   const [progress, setProgress] = useState(0);
   const [hint, setHint] = useState("等待操作");
@@ -60,6 +67,9 @@ export default function App() {
   const [evalLine, setEvalLine] = useState<number[]>([]);
   const [polling, setPolling] = useState(false);
   const [jobName, setJobName] = useState<string>("-");
+  const [modelKey, setModelKey] = useState("tft");
+  const [modelAvailable, setModelAvailable] = useState(false);
+  const [checkingModel, setCheckingModel] = useState(false);
   const cursorRef = useRef(0);
   const [inferParams, setInferParams] = useState({
     targetStep: "1",
@@ -71,6 +81,20 @@ export default function App() {
   const [sampleRows, setSampleRows] = useState("100000");
   const [sampleUnit, setSampleUnit] = useState("100000");
   const [inferResult, setInferResult] = useState<Record<string, string> | null>(null);
+
+  const refreshModelStatus = useCallback(async (model: string) => {
+    const target =
+      model === "tft" ? "/models/tft/tft.ckpt" : "/models/tcn/tcn_model.pt";
+    setCheckingModel(true);
+    try {
+      const res = await fetch(target, { method: "HEAD" });
+      setModelAvailable(res.ok);
+    } catch {
+      setModelAvailable(false);
+    } finally {
+      setCheckingModel(false);
+    }
+  }, []);
 
   useEffect(() => {
     if (!polling) return;
@@ -102,8 +126,11 @@ export default function App() {
           if (payload.status && payload.status !== "running") {
             setPolling(false);
             setHint(payload.status === "completed" ? "任务完成" : "任务结束");
+            if (payload.status === "completed" && payload.job === "train") {
+              refreshModelStatus(modelKey);
+            }
             if (payload.status === "completed" && payload.job === "evaluate") {
-              fetch("/reports/tcn_eval.json")
+              fetch(getEvalReportPath(modelKey))
                 .then((r) => (r.ok ? r.json() : null))
                 .then((data) => {
                   if (!data) return;
@@ -118,15 +145,24 @@ export default function App() {
                 .catch(() => {});
             }
             if (payload.status === "completed" && payload.job === "infer") {
-              fetch("/reports/tcn_inference.json")
+              fetch(getInferReportPath(modelKey))
                 .then((r) => (r.ok ? r.json() : null))
                 .then((data) => {
                   if (!data) return;
+                  const prediction = Number(data.prediction ?? 0);
+                  const lower = Number.isFinite(data.lower_bound) ? Number(data.lower_bound) : prediction;
+                  const upper = Number.isFinite(data.upper_bound) ? Number(data.upper_bound) : prediction;
+                  const q10 = Number.isFinite(data.q10_bound) ? Number(data.q10_bound) : prediction;
+                  const q90 = Number.isFinite(data.q90_bound) ? Number(data.q90_bound) : prediction;
                   setInferResult({
                     series_id: String(data.series_id ?? ""),
                     last_ts: String(data.last_ts ?? ""),
                     horizon_step: String(data.horizon_step ?? ""),
-                    prediction: String(data.prediction ?? "")
+                    prediction: prediction.toFixed(4),
+                    lower_bound: lower.toFixed(4),
+                    upper_bound: upper.toFixed(4),
+                    q10_bound: q10.toFixed(4),
+                    q90_bound: q90.toFixed(4)
                   });
                 })
                 .catch(() => {});
@@ -141,7 +177,12 @@ export default function App() {
   }, [polling]);
 
   useEffect(() => {
-    fetch("/reports/tcn_eval.json")
+    setInferResult(null);
+    setMetrics(initialMetrics);
+    setTrainLine([]);
+    setEvalLine([]);
+    refreshModelStatus(modelKey);
+    fetch(getEvalReportPath(modelKey))
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         if (!data) return;
@@ -155,7 +196,7 @@ export default function App() {
       })
       .catch(() => {});
 
-    fetch("/reports/tcn_inference.json")
+    fetch(getInferReportPath(modelKey))
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         if (!data) return;
@@ -176,7 +217,7 @@ export default function App() {
         });
       })
       .catch(() => {});
-  }, []);
+  }, [modelKey, refreshModelStatus]);
 
   const runAction = async (url: string, label: string, body?: Record<string, unknown>) => {
     setHint(label);
@@ -190,11 +231,20 @@ export default function App() {
       if (!res.ok) throw new Error("request failed");
       if (url === "/api/infer") {
         const data = await res.json();
+        const prediction = Number(data.prediction ?? 0);
+        const lower = Number.isFinite(data.lower_bound) ? Number(data.lower_bound) : prediction;
+        const upper = Number.isFinite(data.upper_bound) ? Number(data.upper_bound) : prediction;
+        const q10 = Number.isFinite(data.q10_bound) ? Number(data.q10_bound) : prediction;
+        const q90 = Number.isFinite(data.q90_bound) ? Number(data.q90_bound) : prediction;
         setInferResult({
           series_id: String(data.series_id ?? ""),
           last_ts: String(data.last_ts ?? ""),
           horizon_step: String(data.horizon_step ?? ""),
-          prediction: String(data.prediction ?? "")
+          prediction: prediction.toFixed(4),
+          lower_bound: lower.toFixed(4),
+          upper_bound: upper.toFixed(4),
+          q10_bound: q10.toFixed(4),
+          q90_bound: q90.toFixed(4)
         });
         setHint("推理完成");
         return;
@@ -215,98 +265,105 @@ export default function App() {
   const activeMeta = pageMeta;
 
   return (
-    <div className="content">
+    <div className="app-shell">
       <Topbar title={activeMeta.title} subtitle={activeMeta.subtitle} />
-      <section className="grid dashboard">
-          <div className="area-controls">
-            <ActionPanel
-              onTrain={() => runAction("/api/train", "训练中...")}
-              onEval={() => runAction("/api/evaluate", "评估中...")}
-              onInfer={() =>
-                runAction("/api/infer", "推理中...", {
-                  target_step: Number(inferParams.targetStep || "24"),
-                  single_result: true,
-                  filters: {
-                    site: inferParams.site || null,
-                    currency: inferParams.currency || null,
-                    fee_type: inferParams.feeType || null,
-                    series_id: inferParams.seriesId || null
-                  }
-                })
-              }
-              onStop={() => runAction("/api/stop", "停止中...")}
-              hint={hint}
-              progress={progress}
-            >
-            <div className="card-header compact">
-              <h2>推理参数</h2>
-              <span className="tag">可选</span>
+      <div className="app-grid">
+        <div className="stack">
+          <ActionPanel
+            onTrain={() => runAction("/api/train", "训练中...", { model: modelKey })}
+            onEval={() => runAction("/api/evaluate", "评估中...", { model: modelKey })}
+            onInfer={() =>
+              runAction("/api/infer", "推理中...", {
+                model: modelKey,
+                target_step: Number(inferParams.targetStep || "24"),
+                single_result: true,
+                filters: {
+                  site: inferParams.site || null,
+                  currency: inferParams.currency || null,
+                  fee_type: inferParams.feeType || null,
+                  series_id: inferParams.seriesId || null
+                }
+              })
+            }
+            onStop={() => runAction("/api/stop", "停止中...")}
+            hint={hint}
+            progress={progress}
+            model={modelKey}
+            onModelChange={setModelKey}
+            canEvaluate={modelAvailable && !checkingModel}
+            canInfer={modelAvailable && !checkingModel}
+          >
+            <div className="panel-block">
+              <div className="block-header">
+                <h3>推理参数</h3>
+                <span className="chip">可选</span>
+              </div>
+              <div className="form-grid">
+                <label>
+                  预测时间点（未来第 N 小时）
+                  <select
+                    value={inferParams.targetStep}
+                    onChange={(e) => setInferParams((prev) => ({ ...prev, targetStep: e.target.value }))}
+                  >
+                    <option value="1">1 小时</option>
+                    <option value="6">6 小时</option>
+                    <option value="12">12 小时</option>
+                    <option value="24">24 小时</option>
+                    <option value="48">48 小时</option>
+                  </select>
+                </label>
+                <label>
+                  站点
+                  <select
+                    value={inferParams.site}
+                    onChange={(e) => setInferParams((prev) => ({ ...prev, site: e.target.value }))}
+                  >
+                    <option value="">全部站点</option>
+                    <option value="US">US</option>
+                    <option value="UK">UK</option>
+                    <option value="DE">DE</option>
+                  </select>
+                </label>
+                <label>
+                  币种
+                  <select
+                    value={inferParams.currency}
+                    onChange={(e) => setInferParams((prev) => ({ ...prev, currency: e.target.value }))}
+                  >
+                    <option value="">全部币种</option>
+                    <option value="USD">USD</option>
+                    <option value="EUR">EUR</option>
+                    <option value="GBP">GBP</option>
+                  </select>
+                </label>
+                <label>
+                  费用类型
+                  <select
+                    value={inferParams.feeType}
+                    onChange={(e) => setInferParams((prev) => ({ ...prev, feeType: e.target.value }))}
+                  >
+                    <option value="">全部费用类型</option>
+                    <option value="listing_fee">listing_fee</option>
+                    <option value="final_value_fee">final_value_fee</option>
+                    <option value="payment_processing_fee">payment_processing_fee</option>
+                  </select>
+                </label>
+                <label>
+                  序列ID
+                  <select
+                    value={inferParams.seriesId}
+                    onChange={(e) => setInferParams((prev) => ({ ...prev, seriesId: e.target.value }))}
+                  >
+                    <option value="">自动（按过滤条件）</option>
+                  </select>
+                </label>
+              </div>
+              <div className="hint muted">推理会自动读取模型元数据，步数不得超过训练 horizon。</div>
             </div>
-            <div className="form-grid">
-              <label>
-                预测时间点（未来第 N 小时）
-                <select
-                  value={inferParams.targetStep}
-                  onChange={(e) => setInferParams((prev) => ({ ...prev, targetStep: e.target.value }))}
-                >
-                  <option value="1">1 小时</option>
-                  <option value="6">6 小时</option>
-                  <option value="12">12 小时</option>
-                  <option value="24">24 小时</option>
-                  <option value="48">48 小时</option>
-                </select>
-              </label>
-              <label>
-                站点
-                <select
-                  value={inferParams.site}
-                  onChange={(e) => setInferParams((prev) => ({ ...prev, site: e.target.value }))}
-                >
-                  <option value="">全部站点</option>
-                  <option value="US">US</option>
-                  <option value="UK">UK</option>
-                  <option value="DE">DE</option>
-                </select>
-              </label>
-              <label>
-                币种
-                <select
-                  value={inferParams.currency}
-                  onChange={(e) => setInferParams((prev) => ({ ...prev, currency: e.target.value }))}
-                >
-                  <option value="">全部币种</option>
-                  <option value="USD">USD</option>
-                  <option value="EUR">EUR</option>
-                  <option value="GBP">GBP</option>
-                </select>
-              </label>
-              <label>
-                费用类型
-                <select
-                  value={inferParams.feeType}
-                  onChange={(e) => setInferParams((prev) => ({ ...prev, feeType: e.target.value }))}
-                >
-                  <option value="">全部费用类型</option>
-                  <option value="listing_fee">listing_fee</option>
-                  <option value="final_value_fee">final_value_fee</option>
-                  <option value="payment_processing_fee">payment_processing_fee</option>
-                </select>
-              </label>
-              <label>
-                序列ID
-                <select
-                  value={inferParams.seriesId}
-                  onChange={(e) => setInferParams((prev) => ({ ...prev, seriesId: e.target.value }))}
-                >
-                  <option value="">自动（按过滤条件）</option>
-                </select>
-              </label>
-            </div>
-            <div className="hint muted">推理会自动读取模型元数据，步数不得超过训练 horizon。</div>
-            <div className="panel-section">
-              <div className="card-header compact">
-                <h2>数据生成</h2>
-                <span className="tag">可选</span>
+            <div className="panel-block">
+              <div className="block-header">
+                <h3>数据生成</h3>
+                <span className="chip">可选</span>
               </div>
               <div className="form-grid">
                 <label>
@@ -330,7 +387,7 @@ export default function App() {
                     </select>
                   </div>
                 </label>
-                <label>
+                <label className="form-span">
                   执行
                   <button
                     className="secondary"
@@ -345,56 +402,60 @@ export default function App() {
                 </label>
               </div>
             </div>
-            <div className="panel-section">
-              <div className="card-header compact">
-                <h2>推理结果</h2>
-                <span className="tag">最新</span>
+            <div className="panel-block">
+              <div className="block-header">
+                <h3>推理结果</h3>
+                <span className="chip">最新</span>
               </div>
-            {!inferResult ? (
-              <div className="hint muted">暂无推理结果，请执行推理任务。</div>
-            ) : (
-              <div className="result-grid">
-                <div>
-                  <span>序列标识</span>
-                  <strong>{inferResult.series_id}</strong>
+              {!inferResult ? (
+                <div className="hint muted">暂无推理结果，请执行推理任务。</div>
+              ) : (
+                <div className="result-grid">
+                  <div>
+                    <span>序列标识</span>
+                    <strong>{inferResult.series_id}</strong>
+                  </div>
+                  <div>
+                    <span>最近时间</span>
+                    <strong>{inferResult.last_ts}</strong>
+                  </div>
+                  <div>
+                    <span>预测步</span>
+                    <strong>{inferResult.horizon_step}</strong>
+                  </div>
+                  <div>
+                    <span>预测值</span>
+                    <strong>{inferResult.prediction}</strong>
+                  </div>
+                  <div>
+                    <span>下界</span>
+                    <strong>{inferResult.lower_bound}</strong>
+                  </div>
+                  <div>
+                    <span>上界</span>
+                    <strong>{inferResult.upper_bound}</strong>
+                  </div>
+                  <div>
+                    <span>分位下界 (P10)</span>
+                    <strong>{inferResult.q10_bound}</strong>
+                  </div>
+                  <div>
+                    <span>分位上界 (P90)</span>
+                    <strong>{inferResult.q90_bound}</strong>
+                  </div>
                 </div>
-                <div>
-                  <span>最近时间</span>
-                  <strong>{inferResult.last_ts}</strong>
-                </div>
-                <div>
-                  <span>预测步</span>
-                  <strong>{inferResult.horizon_step}</strong>
-                </div>
-                <div>
-                  <span>预测值</span>
-                  <strong>{inferResult.prediction}</strong>
-                </div>
-                <div>
-                  <span>下界</span>
-                  <strong>{inferResult.lower_bound}</strong>
-                </div>
-                <div>
-                  <span>上界</span>
-                  <strong>{inferResult.upper_bound}</strong>
-                </div>
-                <div>
-                  <span>分位下界 (P10)</span>
-                  <strong>{inferResult.q10_bound}</strong>
-                </div>
-                <div>
-                  <span>分位上界 (P90)</span>
-                  <strong>{inferResult.q90_bound}</strong>
-                </div>
-              </div>
-            )}
+              )}
             </div>
-            </ActionPanel>
-          </div>
-          <div className="card area-train">
+          </ActionPanel>
+        </div>
+        <div className="stack main-stack">
+          <section className="card overview-card">
             <div className="card-header">
-              <h2>训练与运行概览</h2>
-              <span className="tag">TCN</span>
+              <div>
+                <h2>训练与运行概览</h2>
+                <p className="subtitle muted">监控训练损失与评估表现</p>
+              </div>
+              <span className="chip">{modelKey.toUpperCase()}</span>
             </div>
             <div className="info-grid">
               <div>
@@ -432,8 +493,8 @@ export default function App() {
               <svg viewBox="0 0 320 120" aria-label="train-chart">
                 <defs>
                   <linearGradient id="train-chart-grad" x1="0%" y1="0%" x2="100%" y2="0%">
-                    <stop offset="0%" stopColor="#1677ff" />
-                    <stop offset="100%" stopColor="#69c0ff" />
+                    <stop offset="0%" stopColor="#0f766e" />
+                    <stop offset="100%" stopColor="#5eead4" />
                   </linearGradient>
                 </defs>
                 <path
@@ -452,10 +513,10 @@ export default function App() {
                 />
               </svg>
             </div>
-            <div className="panel-section">
-              <div className="card-header compact">
-                <h2>评估结果</h2>
-                <span className="tag">测试集</span>
+            <div className="panel-block">
+              <div className="block-header">
+                <h3>评估结果</h3>
+                <span className="chip">测试集</span>
               </div>
               <div className="metrics">
                 <div>
@@ -475,8 +536,8 @@ export default function App() {
                 <svg viewBox="0 0 320 120" aria-label="eval-chart">
                   <defs>
                     <linearGradient id="eval-chart-grad" x1="0%" y1="0%" x2="100%" y2="0%">
-                      <stop offset="0%" stopColor="#1677ff" />
-                      <stop offset="100%" stopColor="#69c0ff" />
+                      <stop offset="0%" stopColor="#f97316" />
+                      <stop offset="100%" stopColor="#fdba74" />
                     </linearGradient>
                   </defs>
                   <path
@@ -499,9 +560,10 @@ export default function App() {
             <div className="hint muted">
               支持一键停止正在运行的训练/评估/推理任务。
             </div>
-          </div>
+          </section>
           <LogPanel logs={logs} />
-      </section>
+        </div>
+      </div>
     </div>
   );
 }

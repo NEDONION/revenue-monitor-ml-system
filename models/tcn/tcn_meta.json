@@ -1,0 +1,18 @@
+{
+  "input_length": 168,
+  "horizon": 24,
+  "context_columns": [
+    "local_hour",
+    "day_of_week",
+    "is_weekend",
+    "is_holiday",
+    "is_promo"
+  ],
+  "hidden_channels": 32,
+  "num_layers": 3,
+  "quantiles": [
+    0.1,
+    0.5,
+    0.9
+  ]
+}

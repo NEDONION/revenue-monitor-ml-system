@@ -7,7 +7,7 @@ export default function LogPanel({ logs }: Props) {
     <div className="card log-card area-logs">
       <div className="card-header">
         <h2>任务日志</h2>
-        <span className="tag">实时</span>
+        <span className="chip">实时</span>
       </div>
       <div className="log">
         {logs.length === 0 ? (

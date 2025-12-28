@@ -6,13 +6,20 @@ type Props = {
 export default function Topbar({ title, subtitle }: Props) {
   return (
     <header className="topbar">
-      <div>
+      <div className="topbar-title">
+        <span className="eyebrow">Revenue Monitor</span>
         <h1>{title}</h1>
-        <p>{subtitle}</p>
+        <p className="subtitle">{subtitle}</p>
       </div>
       <div className="topbar-actions">
-        <span className="pill">环境：本地</span>
-        <span className="pill pill-ok">就绪</span>
+        <div className="status-card">
+          <span className="status-label">环境</span>
+          <strong>本地</strong>
+        </div>
+        <div className="status-card status-ok">
+          <span className="status-label">状态</span>
+          <strong>就绪</strong>
+        </div>
       </div>
     </header>
   );

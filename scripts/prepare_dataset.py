@@ -462,7 +462,7 @@ def main() -> None:
         default=False,
         help="Drop rows with NaN lag/rolling features.",
     )
-    parser.add_argument("--sample-rows", type=int, default=100000)
+    parser.add_argument("--sample-rows", type=int, default=1000000)
     args = parser.parse_args()
 
     if not args.input.exists():

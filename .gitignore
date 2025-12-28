@@ -26,9 +26,9 @@ Thumbs.db
 data/
 outputs/
 artifacts/
-models/
 logs/
 wandb/
+lightning_logs/
 
 # Jupyter
 .ipynb_checkpoints/

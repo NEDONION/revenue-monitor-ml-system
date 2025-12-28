@@ -8,6 +8,7 @@ import os
 
 from fastapi import FastAPI, HTTPException, Body
 from fastapi.staticfiles import StaticFiles
+from src.models.tft.infer import infer_tft_from_dict
 from src.inference.tcn_infer import infer_single, load_infer_config_from_dict
 
 
@@ -101,18 +102,26 @@ app.mount("/models", StaticFiles(directory=ROOT / "models"), name="models")
 
 
 @app.post("/api/train")
-def start_train():
+def start_train(payload: dict = Body(default={})):
+    model = str(payload.get("model", "tft")).lower()
+    if model not in {"tft", "tcn"}:
+        raise HTTPException(status_code=400, detail="Unsupported model")
     try:
-        jobs.start("train", "train_tcn.py")
+        script = "train_tft.py" if model == "tft" else "train_tcn.py"
+        jobs.start("train", script)
     except RuntimeError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     return {"status": "started"}
 
 
 @app.post("/api/evaluate")
-def start_eval():
+def start_eval(payload: dict = Body(default={})):
+    model = str(payload.get("model", "tft")).lower()
+    if model not in {"tft", "tcn"}:
+        raise HTTPException(status_code=400, detail="Unsupported model")
     try:
-        jobs.start("evaluate", "evaluate_tcn.py")
+        script = "evaluate_tft.py" if model == "tft" else "evaluate_tcn.py"
+        jobs.start("evaluate", script)
     except RuntimeError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     return {"status": "started"}
@@ -120,7 +129,10 @@ def start_eval():
 
 @app.post("/api/infer")
 def start_infer(payload: dict = Body(default={})):
-    base = ROOT / "configs" / "tcn_infer.json"
+    model = str(payload.get("model", "tft")).lower()
+    if model not in {"tft", "tcn"}:
+        raise HTTPException(status_code=400, detail="Unsupported model")
+    base = ROOT / "configs" / "tft" / "infer.json" if model == "tft" else ROOT / "configs" / "tcn_infer.json"
     if base.exists():
         config = json.loads(base.read_text(encoding="utf-8"))
     else:
@@ -129,7 +141,10 @@ def start_infer(payload: dict = Body(default={})):
         config.update(payload)
     jobs.add_log("--- 开始任务: infer ---")
     try:
-        result = infer_single(load_infer_config_from_dict(config))
+        if model == "tft":
+            result = infer_tft_from_dict(config)
+        else:
+            result = infer_single(load_infer_config_from_dict(config))
         jobs.add_log(f"推理完成: {result.get('series_id')} step={result.get('horizon_step')}")
     except ValueError as exc:
         jobs.add_log(f"推理失败: {exc}")
