@@ -43,7 +43,7 @@ class TCNConfig:
     hidden_channels: int
     num_layers: int
     loss_type: str
-    quantile_tau: float
+    quantiles: List[float]
     early_stopping_patience: int
     early_stopping_min_delta: float
 
@@ -69,7 +69,7 @@ def load_tcn_config(path: Path) -> TCNConfig:
         hidden_channels=int(raw.get("hidden_channels", 32)),
         num_layers=int(raw.get("num_layers", 3)),
         loss_type=raw.get("loss_type", "mae"),
-        quantile_tau=float(raw.get("quantile_tau", 0.9)),
+        quantiles=list(raw.get("quantiles", [0.1, 0.9])),
         early_stopping_patience=int(raw.get("early_stopping_patience", 3)),
         early_stopping_min_delta=float(raw.get("early_stopping_min_delta", 1e-4)),
     )
@@ -77,7 +77,14 @@ def load_tcn_config(path: Path) -> TCNConfig:
 
 class TCN(nn.Module):
     # 时间卷积网络（TCN）用于多步预测。
-    def __init__(self, input_channels: int, hidden_channels: int, num_layers: int, horizon: int) -> None:
+    def __init__(
+        self,
+        input_channels: int,
+        hidden_channels: int,
+        num_layers: int,
+        horizon: int,
+        num_quantiles: int = 1,
+    ) -> None:
         super().__init__()
         layers = []
         in_channels = input_channels
@@ -95,7 +102,9 @@ class TCN(nn.Module):
             layers.append(nn.ReLU())
             in_channels = hidden_channels
         self.tcn = nn.Sequential(*layers)
-        self.head = nn.Linear(hidden_channels, horizon)
+        self.horizon = horizon
+        self.num_quantiles = num_quantiles
+        self.head = nn.Linear(hidden_channels, horizon * num_quantiles)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # x: (batch, seq_len, channels) -> (batch, channels, seq_len)
@@ -103,7 +112,8 @@ class TCN(nn.Module):
         features = self.tcn(x)
         # 取最后一个时间步作为序列表示。
         last = features[:, :, -1]
-        return self.head(last)
+        out = self.head(last)
+        return out.view(-1, self.horizon, self.num_quantiles)
 
 
 def ensure_context_columns(df: pd.DataFrame, context_columns: List[str]) -> List[str]:
@@ -111,16 +121,19 @@ def ensure_context_columns(df: pd.DataFrame, context_columns: List[str]) -> List
     return [col for col in context_columns if col in df.columns]
 
 
-def _select_loss(loss_type: str, tau: float):
+def _select_loss(loss_type: str, quantiles: List[float]):
     # 根据配置选择损失函数。
     if loss_type == "mae":
         return torch.nn.L1Loss()
     if loss_type == "mse":
         return torch.nn.MSELoss()
     if loss_type == "quantile":
+        taus = torch.tensor(quantiles).view(1, 1, -1)
         def _pinball(pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
-            diff = target - pred
-            return torch.mean(torch.maximum(tau * diff, (tau - 1) * diff))
+            # pred: (batch, horizon, q), target: (batch, horizon)
+            diff = target.unsqueeze(-1) - pred
+            loss = torch.maximum(taus * diff, (taus - 1) * diff)
+            return torch.mean(loss)
         return _pinball
     raise ValueError(f"Unsupported loss_type: {loss_type}")
 
@@ -207,12 +220,13 @@ def train_tcn(config_path: Path) -> None:
         hidden_channels=config.hidden_channels,
         num_layers=config.num_layers,
         horizon=config.horizon,
+        num_quantiles=len(config.quantiles) if config.loss_type == "quantile" else 1,
     )
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=config.learning_rate)
-    loss_fn = _select_loss(config.loss_type, config.quantile_tau)
+    loss_fn = _select_loss(config.loss_type, config.quantiles)
 
     use_wandb = bool(os.environ.get("WANDB_PROJECT")) and wandb is not None
     run = None
@@ -242,6 +256,8 @@ def train_tcn(config_path: Path) -> None:
             y = y.to(device)
             optimizer.zero_grad()
             preds = model(x)
+            if config.loss_type != "quantile":
+                preds = preds.squeeze(-1)
             loss = loss_fn(preds, y)
             loss.backward()
             optimizer.step()
@@ -262,6 +278,8 @@ def train_tcn(config_path: Path) -> None:
                     x = x.to(device)
                     y = y.to(device)
                     preds = model(x)
+                    if config.loss_type != "quantile":
+                        preds = preds.squeeze(-1)
                     loss = loss_fn(preds, y)
                     val_total += loss.item() * x.size(0)
                     preds_list.append(preds.cpu())
@@ -344,6 +362,7 @@ def train_tcn(config_path: Path) -> None:
         "context_columns": config.context_columns,
         "hidden_channels": config.hidden_channels,
         "num_layers": config.num_layers,
+        "quantiles": config.quantiles,
     }
     with meta_path.open("w", encoding="utf-8") as handle:
         json.dump(meta, handle, ensure_ascii=False, indent=2)

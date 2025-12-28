@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import Topbar from "./components/Topbar";
 import ActionPanel from "./components/ActionPanel";
-import ChartCard from "./components/ChartCard";
 import LogPanel from "./components/LogPanel";
 import FileList from "./components/FileList";
 
@@ -63,12 +62,15 @@ export default function App() {
   const [jobName, setJobName] = useState<string>("-");
   const cursorRef = useRef(0);
   const [inferParams, setInferParams] = useState({
-    steps: "24",
-    site: "",
-    currency: "",
-    feeType: "",
+    targetStep: "1",
+    site: "US",
+    currency: "USD",
+    feeType: "listing_fee",
     seriesId: ""
   });
+  const [sampleRows, setSampleRows] = useState("100000");
+  const [sampleUnit, setSampleUnit] = useState("100000");
+  const [inferResult, setInferResult] = useState<Record<string, string> | null>(null);
 
   useEffect(() => {
     if (!polling) return;
@@ -115,6 +117,20 @@ export default function App() {
                 })
                 .catch(() => {});
             }
+            if (payload.status === "completed" && payload.job === "infer") {
+              fetch("/reports/tcn_inference.json")
+                .then((r) => (r.ok ? r.json() : null))
+                .then((data) => {
+                  if (!data) return;
+                  setInferResult({
+                    series_id: String(data.series_id ?? ""),
+                    last_ts: String(data.last_ts ?? ""),
+                    horizon_step: String(data.horizon_step ?? ""),
+                    prediction: String(data.prediction ?? "")
+                  });
+                })
+                .catch(() => {});
+            }
           }
         }
       } catch {
@@ -123,6 +139,44 @@ export default function App() {
     }, 1000);
     return () => clearInterval(timer);
   }, [polling]);
+
+  useEffect(() => {
+    fetch("/reports/tcn_eval.json")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!data) return;
+        setMetrics((prev) => ({
+          ...prev,
+          mape: Number(data.mape).toFixed(4),
+          smape: Number(data.smape).toFixed(4),
+          r2: Number(data.r2).toFixed(4)
+        }));
+        setEvalLine((prev) => (prev.length ? prev : [data.mape, data.smape, data.r2]));
+      })
+      .catch(() => {});
+
+    fetch("/reports/tcn_inference.json")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!data) return;
+        const prediction = Number(data.prediction ?? 0);
+        const lower = Number.isFinite(data.lower_bound) ? Number(data.lower_bound) : prediction;
+        const upper = Number.isFinite(data.upper_bound) ? Number(data.upper_bound) : prediction;
+        const q10 = Number.isFinite(data.q10_bound) ? Number(data.q10_bound) : prediction;
+        const q90 = Number.isFinite(data.q90_bound) ? Number(data.q90_bound) : prediction;
+        setInferResult({
+          series_id: String(data.series_id ?? ""),
+          last_ts: String(data.last_ts ?? ""),
+          horizon_step: String(data.horizon_step ?? ""),
+          prediction: prediction.toFixed(4),
+          lower_bound: lower.toFixed(4),
+          upper_bound: upper.toFixed(4),
+          q10_bound: q10.toFixed(4),
+          q90_bound: q90.toFixed(4)
+        });
+      })
+      .catch(() => {});
+  }, []);
 
   const runAction = async (url: string, label: string, body?: Record<string, unknown>) => {
     setHint(label);
@@ -134,6 +188,17 @@ export default function App() {
         body: body ? JSON.stringify(body) : undefined
       });
       if (!res.ok) throw new Error("request failed");
+      if (url === "/api/infer") {
+        const data = await res.json();
+        setInferResult({
+          series_id: String(data.series_id ?? ""),
+          last_ts: String(data.last_ts ?? ""),
+          horizon_step: String(data.horizon_step ?? ""),
+          prediction: String(data.prediction ?? "")
+        });
+        setHint("推理完成");
+        return;
+      }
       if (url === "/api/stop") {
         setPolling(false);
         setHint("已停止");
@@ -153,81 +218,183 @@ export default function App() {
     <div className="content">
       <Topbar title={activeMeta.title} subtitle={activeMeta.subtitle} />
       <section className="grid dashboard">
-          <ActionPanel
-            onTrain={() => runAction("/api/train", "训练中...")}
-            onEval={() => runAction("/api/evaluate", "评估中...")}
-            onInfer={() =>
-              runAction("/api/infer", "推理中...", {
-                steps: Number(inferParams.steps || "24"),
-                filters: {
-                  site: inferParams.site || null,
-                  currency: inferParams.currency || null,
-                  fee_type: inferParams.feeType || null,
-                  series_id: inferParams.seriesId || null
-                }
-              })
-            }
-            onStop={() => runAction("/api/stop", "停止中...")}
-            hint={hint}
-            progress={progress}
-          >
+          <div className="area-controls">
+            <ActionPanel
+              onTrain={() => runAction("/api/train", "训练中...")}
+              onEval={() => runAction("/api/evaluate", "评估中...")}
+              onInfer={() =>
+                runAction("/api/infer", "推理中...", {
+                  target_step: Number(inferParams.targetStep || "24"),
+                  single_result: true,
+                  filters: {
+                    site: inferParams.site || null,
+                    currency: inferParams.currency || null,
+                    fee_type: inferParams.feeType || null,
+                    series_id: inferParams.seriesId || null
+                  }
+                })
+              }
+              onStop={() => runAction("/api/stop", "停止中...")}
+              hint={hint}
+              progress={progress}
+            >
             <div className="card-header compact">
               <h2>推理参数</h2>
               <span className="tag">可选</span>
             </div>
             <div className="form-grid">
               <label>
-                预测步数（未来预测的小时数）
+                预测时间点（未来第 N 小时）
                 <select
-                  value={inferParams.steps}
-                  onChange={(e) => setInferParams((prev) => ({ ...prev, steps: e.target.value }))}
+                  value={inferParams.targetStep}
+                  onChange={(e) => setInferParams((prev) => ({ ...prev, targetStep: e.target.value }))}
                 >
+                  <option value="1">1 小时</option>
                   <option value="6">6 小时</option>
                   <option value="12">12 小时</option>
                   <option value="24">24 小时</option>
                   <option value="48">48 小时</option>
-                  <option value="72">72 小时</option>
                 </select>
               </label>
               <label>
                 站点
-                <input
+                <select
                   value={inferParams.site}
                   onChange={(e) => setInferParams((prev) => ({ ...prev, site: e.target.value }))}
-                  placeholder="US/UK/DE"
-                />
+                >
+                  <option value="">全部站点</option>
+                  <option value="US">US</option>
+                  <option value="UK">UK</option>
+                  <option value="DE">DE</option>
+                </select>
               </label>
               <label>
                 币种
-                <input
+                <select
                   value={inferParams.currency}
                   onChange={(e) => setInferParams((prev) => ({ ...prev, currency: e.target.value }))}
-                  placeholder="USD/EUR"
-                />
+                >
+                  <option value="">全部币种</option>
+                  <option value="USD">USD</option>
+                  <option value="EUR">EUR</option>
+                  <option value="GBP">GBP</option>
+                </select>
               </label>
               <label>
                 费用类型
-                <input
+                <select
                   value={inferParams.feeType}
                   onChange={(e) => setInferParams((prev) => ({ ...prev, feeType: e.target.value }))}
-                  placeholder="final_value_fee"
-                />
+                >
+                  <option value="">全部费用类型</option>
+                  <option value="listing_fee">listing_fee</option>
+                  <option value="final_value_fee">final_value_fee</option>
+                  <option value="payment_processing_fee">payment_processing_fee</option>
+                </select>
               </label>
               <label>
                 序列ID
-                <input
+                <select
                   value={inferParams.seriesId}
                   onChange={(e) => setInferParams((prev) => ({ ...prev, seriesId: e.target.value }))}
-                  placeholder="site|currency|fee_type|metric_name|granularity"
-                />
+                >
+                  <option value="">自动（按过滤条件）</option>
+                </select>
               </label>
             </div>
             <div className="hint muted">推理会自动读取模型元数据，步数不得超过训练 horizon。</div>
-          </ActionPanel>
-          <div className="card area-info">
+            <div className="panel-section">
+              <div className="card-header compact">
+                <h2>数据生成</h2>
+                <span className="tag">可选</span>
+              </div>
+              <div className="form-grid">
+                <label>
+                  样本条数
+                  <div className="inline-input">
+                    <input
+                      value={sampleRows}
+                      onChange={(e) => setSampleRows(e.target.value.replace(/[^\d]/g, ""))}
+                      placeholder="100"
+                    />
+                    <span className="inline-preview">
+                      {Number(sampleRows || "0").toLocaleString()}
+                    </span>
+                    <select
+                      value={sampleUnit}
+                      onChange={(e) => setSampleUnit(e.target.value)}
+                    >
+                      <option value="10000">万 (10,000)</option>
+                      <option value="1000000">百万 (1,000,000)</option>
+                      <option value="10000000">千万 (10,000,000)</option>
+                    </select>
+                  </div>
+                </label>
+                <label>
+                  执行
+                  <button
+                    className="secondary"
+                    onClick={() =>
+                      runAction("/api/prepare", "生成数据中...", {
+                        sample_rows: Number(sampleRows || "0") * Number(sampleUnit)
+                      })
+                    }
+                  >
+                    生成训练数据
+                  </button>
+                </label>
+              </div>
+            </div>
+            <div className="panel-section">
+              <div className="card-header compact">
+                <h2>推理结果</h2>
+                <span className="tag">最新</span>
+              </div>
+            {!inferResult ? (
+              <div className="hint muted">暂无推理结果，请执行推理任务。</div>
+            ) : (
+              <div className="result-grid">
+                <div>
+                  <span>序列标识</span>
+                  <strong>{inferResult.series_id}</strong>
+                </div>
+                <div>
+                  <span>最近时间</span>
+                  <strong>{inferResult.last_ts}</strong>
+                </div>
+                <div>
+                  <span>预测步</span>
+                  <strong>{inferResult.horizon_step}</strong>
+                </div>
+                <div>
+                  <span>预测值</span>
+                  <strong>{inferResult.prediction}</strong>
+                </div>
+                <div>
+                  <span>下界</span>
+                  <strong>{inferResult.lower_bound}</strong>
+                </div>
+                <div>
+                  <span>上界</span>
+                  <strong>{inferResult.upper_bound}</strong>
+                </div>
+                <div>
+                  <span>分位下界 (P10)</span>
+                  <strong>{inferResult.q10_bound}</strong>
+                </div>
+                <div>
+                  <span>分位上界 (P90)</span>
+                  <strong>{inferResult.q90_bound}</strong>
+                </div>
+              </div>
+            )}
+            </div>
+            </ActionPanel>
+          </div>
+          <div className="card area-train">
             <div className="card-header">
-              <h2>运行概览</h2>
-              <span className="tag">实时</span>
+              <h2>训练与运行概览</h2>
+              <span className="tag">TCN</span>
             </div>
             <div className="info-grid">
               <div>
@@ -247,34 +414,93 @@ export default function App() {
                 <strong>reports/</strong>
               </div>
             </div>
+            <div className="metrics">
+              <div>
+                <span>train_loss</span>
+                <strong>{metrics.train}</strong>
+              </div>
+              <div>
+                <span>val_mae</span>
+                <strong>{metrics.mae}</strong>
+              </div>
+              <div>
+                <span>val_rmse</span>
+                <strong>{metrics.rmse}</strong>
+              </div>
+            </div>
+            <div className="chart">
+              <svg viewBox="0 0 320 120" aria-label="train-chart">
+                <defs>
+                  <linearGradient id="train-chart-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" stopColor="#1677ff" />
+                    <stop offset="100%" stopColor="#69c0ff" />
+                  </linearGradient>
+                </defs>
+                <path
+                  d={trainLine.length ? trainLine.map((val, idx) => {
+                    const max = Math.max(...trainLine, 1);
+                    const min = Math.min(...trainLine, 0);
+                    const range = max - min || 1;
+                    const step = 320 / Math.max(1, trainLine.length - 1);
+                    const x = idx * step;
+                    const y = 120 - ((val - min) / range) * (120 - 16) - 8;
+                    return `${idx === 0 ? "M" : "L"}${x.toFixed(2)},${y.toFixed(2)}`;
+                  }).join(" ") : "M0,100 L320,100"}
+                  fill="none"
+                  stroke="url(#train-chart-grad)"
+                  strokeWidth="3"
+                />
+              </svg>
+            </div>
+            <div className="panel-section">
+              <div className="card-header compact">
+                <h2>评估结果</h2>
+                <span className="tag">测试集</span>
+              </div>
+              <div className="metrics">
+                <div>
+                  <span>mape</span>
+                  <strong>{metrics.mape}</strong>
+                </div>
+                <div>
+                  <span>smape</span>
+                  <strong>{metrics.smape}</strong>
+                </div>
+                <div>
+                  <span>r2</span>
+                  <strong>{metrics.r2}</strong>
+                </div>
+              </div>
+              <div className="chart">
+                <svg viewBox="0 0 320 120" aria-label="eval-chart">
+                  <defs>
+                    <linearGradient id="eval-chart-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+                      <stop offset="0%" stopColor="#1677ff" />
+                      <stop offset="100%" stopColor="#69c0ff" />
+                    </linearGradient>
+                  </defs>
+                  <path
+                    d={evalLine.length ? evalLine.map((val, idx) => {
+                      const max = Math.max(...evalLine, 1);
+                      const min = Math.min(...evalLine, 0);
+                      const range = max - min || 1;
+                      const step = 320 / Math.max(1, evalLine.length - 1);
+                      const x = idx * step;
+                      const y = 120 - ((val - min) / range) * (120 - 16) - 8;
+                      return `${idx === 0 ? "M" : "L"}${x.toFixed(2)},${y.toFixed(2)}`;
+                    }).join(" ") : "M0,100 L320,100"}
+                    fill="none"
+                    stroke="url(#eval-chart-grad)"
+                    strokeWidth="3"
+                  />
+                </svg>
+              </div>
+            </div>
             <div className="hint muted">
               支持一键停止正在运行的训练/评估/推理任务。
             </div>
           </div>
-          <ChartCard
-            title="训练概览"
-            tag="TCN"
-            chartId="train-chart"
-            points={trainLine}
-            stats={[
-              { label: "train_loss", value: metrics.train },
-              { label: "val_mae", value: metrics.mae },
-              { label: "val_rmse", value: metrics.rmse }
-            ]}
-          />
-          <ChartCard
-            title="评估结果"
-            tag="测试集"
-            chartId="eval-chart"
-            points={evalLine}
-            stats={[
-              { label: "mape", value: metrics.mape },
-              { label: "smape", value: metrics.smape },
-              { label: "r2", value: metrics.r2 }
-            ]}
-          />
           <LogPanel logs={logs} />
-          <FileList />
       </section>
     </div>
   );

@@ -5,7 +5,9 @@ export default defineConfig({
   plugins: [react()],
   server: {
     proxy: {
-      "/api": "http://localhost:8088"
+      "/api": "http://localhost:8088",
+      "/reports": "http://localhost:8088",
+      "/models": "http://localhost:8088"
     }
   }
 });

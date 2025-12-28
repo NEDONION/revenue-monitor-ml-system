@@ -6,16 +6,22 @@
   "series_id_column": "series_id",
   "time_column": "ts",
   "value_column": "metric_value",
-  "context_columns": ["local_hour", "day_of_week", "is_weekend", "is_holiday", "is_promo"],
+  "context_columns": [
+    "local_hour",
+    "day_of_week",
+    "is_weekend",
+    "is_holiday",
+    "is_promo"
+  ],
   "input_length": 168,
   "horizon": 24,
   "target_step": 1,
   "batch_size": 256,
   "single_result": true,
   "filters": {
-    "site": null,
-    "currency": null,
-    "fee_type": null,
+    "site": "US",
+    "currency": "USD",
+    "fee_type": "listing_fee",
     "series_id": null
   }
 }

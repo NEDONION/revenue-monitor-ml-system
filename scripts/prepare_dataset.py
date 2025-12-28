@@ -131,7 +131,7 @@ def read_input(path: Path) -> pd.DataFrame:
     return pd.read_csv(path)
 
 
-def create_sample_dataset(path: Path, granularity: str) -> Path:
+def create_sample_dataset(path: Path, granularity: str, sample_rows: int) -> Path:
     # 生成一个可跑通流程的最小样例数据集。
     if granularity not in ("minute", "hourly", "daily"):
         granularity = "daily"
@@ -140,7 +140,7 @@ def create_sample_dataset(path: Path, granularity: str) -> Path:
         shutil.rmtree(path)
     freq = freq_from_granularity(granularity)
     rng = np.random.default_rng(DEFAULT_RANDOM_SEED)
-    total_rows = 100_000
+    total_rows = max(1, sample_rows)
     sites = ["US", "UK", "DE"]
     currencies = ["USD", "GBP", "EUR"]
     fee_types = ["listing_fee", "final_value_fee", "payment_processing_fee"]
@@ -462,10 +462,11 @@ def main() -> None:
         default=False,
         help="Drop rows with NaN lag/rolling features.",
     )
+    parser.add_argument("--sample-rows", type=int, default=100000)
     args = parser.parse_args()
 
     if not args.input.exists():
-        sample_path = create_sample_dataset(args.input, args.granularity or "daily")
+        sample_path = create_sample_dataset(args.input, args.granularity or "daily", args.sample_rows)
         logging.info("未找到输入文件，已生成样例数据：%s", sample_path)
 
     logging.info("开始读取输入：%s", args.input)

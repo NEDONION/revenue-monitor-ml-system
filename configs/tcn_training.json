@@ -14,8 +14,8 @@
   "learning_rate": 0.001,
   "hidden_channels": 32,
   "num_layers": 3,
-  "loss_type": "mae",
-  "quantile_tau": 0.9,
+  "loss_type": "quantile",
+  "quantiles": [0.1, 0.5, 0.9],
   "early_stopping_patience": 3,
   "early_stopping_min_delta": 0.0001
 }
