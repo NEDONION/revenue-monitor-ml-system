@@ -23,7 +23,7 @@ def train_tft(config_path: Path) -> None:
     df = prepare_tft_dataframe(
         config.input_dir,
         split="train",
-        config.time_column,
+        time_column=config.time_column,
         granularity=config.granularity,
     )
     static_categoricals = ensure_columns(df, config.static_categoricals)
