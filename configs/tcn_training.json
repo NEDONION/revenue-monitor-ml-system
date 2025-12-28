@@ -1,0 +1,21 @@
+{
+  "input_dir": "data/processed",
+  "output_dir": "models/tcn",
+  "split": "train",
+  "granularity": "hourly",
+  "series_id_column": "series_id",
+  "time_column": "ts",
+  "value_column": "metric_value",
+  "context_columns": ["local_hour", "day_of_week", "is_weekend", "is_holiday", "is_promo"],
+  "input_length": 168,
+  "horizon": 24,
+  "batch_size": 128,
+  "epochs": 5,
+  "learning_rate": 0.001,
+  "hidden_channels": 32,
+  "num_layers": 3,
+  "loss_type": "mae",
+  "quantile_tau": 0.9,
+  "early_stopping_patience": 3,
+  "early_stopping_min_delta": 0.0001
+}

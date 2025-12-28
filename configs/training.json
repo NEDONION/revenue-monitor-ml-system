@@ -1,0 +1,10 @@
+{
+  "input_dir": "data/processed",
+  "output_dir": "models/baseline_quantiles",
+  "split": "train",
+  "value_column": "metric_value",
+  "series_id_column": "series_id",
+  "groupby_columns": ["series_id", "local_hour"],
+  "quantiles": [0.1, 0.9],
+  "min_points_per_group": 50
+}
