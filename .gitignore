@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+
+# IDEs
+.idea/
+.vscode/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Env files
+.env
+.env.*
+
+# Data and outputs
+data/
+outputs/
+artifacts/
+models/
+logs/
+
+# Jupyter
+.ipynb_checkpoints/
