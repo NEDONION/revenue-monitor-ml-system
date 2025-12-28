@@ -28,6 +28,8 @@ outputs/
 artifacts/
 models/
 logs/
+wandb/
 
 # Jupyter
 .ipynb_checkpoints/
+/web/node_modules/

@@ -140,7 +140,7 @@ def create_sample_dataset(path: Path, granularity: str) -> Path:
         shutil.rmtree(path)
     freq = freq_from_granularity(granularity)
     rng = np.random.default_rng(DEFAULT_RANDOM_SEED)
-    total_rows = 10_000
+    total_rows = 100_000
     sites = ["US", "UK", "DE"]
     currencies = ["USD", "GBP", "EUR"]
     fee_types = ["listing_fee", "final_value_fee", "payment_processing_fee"]
@@ -459,7 +459,7 @@ def main() -> None:
     parser.add_argument(
         "--drop-feature-na",
         action=argparse.BooleanOptionalAction,
-        default=True,
+        default=False,
         help="Drop rows with NaN lag/rolling features.",
     )
     args = parser.parse_args()

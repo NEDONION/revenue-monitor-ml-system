@@ -6,6 +6,7 @@ import json
 
 @dataclass(frozen=True)
 class TrainingConfig:
+    # 基线训练配置，用于分位数统计模型。
     input_dir: Path
     output_dir: Path
     split: str
@@ -17,6 +18,7 @@ class TrainingConfig:
 
 
 def load_config(path: Path) -> TrainingConfig:
+    # 从 JSON 配置文件加载训练参数。
     with path.open("r", encoding="utf-8") as handle:
         raw = json.load(handle)
     return TrainingConfig(

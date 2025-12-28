@@ -1,0 +1,16 @@
+{
+  "input_dir": "data/processed",
+  "model_dir": "models/tcn",
+  "output_dir": "reports",
+  "split": "test",
+  "granularity": "hourly",
+  "series_id_column": "series_id",
+  "time_column": "ts",
+  "value_column": "metric_value",
+  "context_columns": ["local_hour", "day_of_week", "is_weekend", "is_holiday", "is_promo"],
+  "input_length": 168,
+  "horizon": 24,
+  "batch_size": 128,
+  "hidden_channels": 32,
+  "num_layers": 3
+}

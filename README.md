@@ -44,6 +44,34 @@ python3 scripts/train_model.py
 python3 scripts/train_tcn.py
 ```
 
+环境变量（可选，开启 W&B 训练可视化）：
+```bash
+cp .env.example .env
+```
+
+## 评估（TCN 时间序列模型）
+```bash
+python3 scripts/evaluate_tcn.py
+```
+
+## 推理（TCN 时间序列模型）
+```bash
+python3 scripts/run_inference.py
+```
+
+## 启动控制台与 API
+```bash
+python3 scripts/serve_api.py
+```
+然后访问 `http://localhost:8088/`。
+
+## 前端（React + Vite）
+```bash
+cd web
+npm install
+npm run dev
+```
+
 ## 最佳实践（建议）
 - 使用 `data/` 存放原始与处理后的数据，避免提交到版本库
 - 训练与推理配置参数固定在脚本或配置文件中，避免口口相传

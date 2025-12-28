@@ -6,12 +6,11 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from src.training.tcn import train_tcn  # noqa: E402
+import uvicorn  # noqa: E402
 
 
 def main() -> None:
-    # 训练入口，默认读取 TCN 配置。
-    train_tcn(Path("configs/tcn_training.json"))
+    uvicorn.run("src.service.app:app", host="0.0.0.0", port=8088, reload=False)
 
 
 if __name__ == "__main__":

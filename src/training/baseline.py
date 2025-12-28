@@ -7,6 +7,7 @@ import pandas as pd
 
 @dataclass(frozen=True)
 class QuantileModel:
+    # 基线模型：保存分位数统计表。
     groupby_columns: List[str]
     quantiles: List[float]
     table: pd.DataFrame
@@ -36,5 +37,6 @@ def train_quantile_baseline(
 
 
 def save_quantile_model(model: QuantileModel, output_dir: Path) -> None:
+    # 输出分位数表，作为基线模型产物。
     output_dir.mkdir(parents=True, exist_ok=True)
     model.table.to_parquet(output_dir / "quantiles.parquet", index=False)
