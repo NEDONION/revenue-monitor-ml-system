@@ -36,6 +36,7 @@ DEFAULT_LAGS_BY_GRANULARITY = {
 PROMO_RATE = 0.01
 PROMO_TYPES = ["BlackFriday", "FlashSale", "FeeWaiver"]
 DEFAULT_RANDOM_SEED = 42
+DEFAULT_SAMPLE_ROWS = 1_000_000
 
 # 站点到时区的映射，用于生成本地时间特征。
 SITE_TIMEZONE_MAP = {
@@ -462,11 +463,22 @@ def main() -> None:
         default=False,
         help="Drop rows with NaN lag/rolling features.",
     )
-    parser.add_argument("--sample-rows", type=int, default=1000000)
+    parser.add_argument("--sample-rows", type=int, default=None)
     args = parser.parse_args()
 
-    if not args.input.exists():
-        sample_path = create_sample_dataset(args.input, args.granularity or "daily", args.sample_rows)
+    if args.sample_rows is not None:
+        sample_path = create_sample_dataset(
+            args.input,
+            args.granularity or "daily",
+            args.sample_rows,
+        )
+        logging.info("已生成样例数据（覆盖输入）：%s", sample_path)
+    elif not args.input.exists():
+        sample_path = create_sample_dataset(
+            args.input,
+            args.granularity or "daily",
+            DEFAULT_SAMPLE_ROWS,
+        )
         logging.info("未找到输入文件，已生成样例数据：%s", sample_path)
 
     logging.info("开始读取输入：%s", args.input)

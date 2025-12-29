@@ -10,7 +10,7 @@ from src.models.tft.train import train_tft  # noqa: E402
 
 
 def main() -> None:
-    train_tft(Path("configs/tft/training.json"))
+    train_tft(Path("configs/tft/train.json"))
 
 
 if __name__ == "__main__":

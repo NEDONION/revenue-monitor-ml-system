@@ -34,7 +34,7 @@ uv lock
 - `--input` 输入文件（CSV/Parquet），默认 `data/revenue_ts_wide.csv`
 - `--output-dir` 输出目录，默认 `data/processed`
 - `--granularity` 粒度：`minute | hourly | daily`，默认 `hourly`
-- `--sample-rows` 仅在输入文件不存在时生成样例数据的行数，默认 `1_000_000`
+- `--sample-rows` 生成样例数据并覆盖输入文件（如已存在），不传则仅在输入文件缺失时生成默认 `1_000_000` 行样例数据
 - `--split` 训练/验证/测试比例，例如 `0.7,0.15,0.15`
 - `--write-splits/--no-write-splits` 是否写出分片文件
 
@@ -86,6 +86,29 @@ python3 scripts/evaluate_tft.py
 ## 推理（TFT 时间序列模型）
 ```bash
 python3 scripts/run_tft_inference.py
+```
+
+可选参数（覆盖配置文件 `configs/tft/infer.json`）：
+```bash
+python3 scripts/run_tft_inference.py \
+  --site US \
+  --currency USD \
+  --fee-type listing_fee \
+  --target-step 24
+```
+
+## 推理（TCN 时间序列模型）
+```bash
+python3 scripts/run_inference.py
+```
+
+可选参数（覆盖配置文件 `configs/tcn/infer.json`）：
+```bash
+python3 scripts/run_inference.py \
+  --site US \
+  --currency USD \
+  --fee-type listing_fee \
+  --target-step 24
 ```
 
 ## 启动控制台与 API

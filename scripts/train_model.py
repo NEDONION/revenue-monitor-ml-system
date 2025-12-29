@@ -19,8 +19,8 @@ def main() -> None:
     )
 
     # 读取训练配置与数据。
-    config = load_config(Path("configs/training.json"))
-    logging.info("读取配置：%s", Path("configs/training.json"))
+    config = load_config(Path("configs/baseline/train.json"))
+    logging.info("读取配置：%s", Path("configs/baseline/train.json"))
     logging.info("加载数据：%s", config.input_dir)
     df = load_processed_dataset(config.input_dir, config.split)
     logging.info("数据加载完成，行数：%d", len(df))

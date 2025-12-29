@@ -132,7 +132,7 @@ def start_infer(payload: dict = Body(default={})):
     model = str(payload.get("model", "tft")).lower()
     if model not in {"tft", "tcn"}:
         raise HTTPException(status_code=400, detail="Unsupported model")
-    base = ROOT / "configs" / "tft" / "infer.json" if model == "tft" else ROOT / "configs" / "tcn_infer.json"
+    base = ROOT / "configs" / "tft" / "infer.json" if model == "tft" else ROOT / "configs" / "tcn" / "infer.json"
     if base.exists():
         config = json.loads(base.read_text(encoding="utf-8"))
     else:

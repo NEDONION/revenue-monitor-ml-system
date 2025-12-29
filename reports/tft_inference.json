@@ -1,0 +1,8 @@
+{
+  "series_id": "US|USD|listing_fee|revenue|hourly",
+  "last_ts": "2024-01-02T12:00:00+00:00",
+  "horizon_step": 1,
+  "prediction": 6.341300964355469,
+  "lower_bound": 0.0,
+  "upper_bound": 43.35629653930664
+}

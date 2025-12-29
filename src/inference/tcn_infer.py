@@ -88,7 +88,6 @@ def _build_infer_batches(
     batch_inputs: List[torch.Tensor] = []
     meta: List[Tuple[str, pd.Timestamp]] = []
     window_stds: List[float] = []
-    window_quantiles: List[Tuple[float, float]] = []
     for series_id, group in df.groupby(series_id_column):
         group = group.sort_values(time_column)
         if len(group) < input_length:
@@ -111,9 +110,6 @@ def _build_infer_batches(
         batch_inputs.append(features)
         meta.append((series_id, window[time_column].iloc[-1]))
         window_stds.append(float(values.std()))
-        window_quantiles.append(
-            (float(pd.Series(values).quantile(0.1)), float(pd.Series(values).quantile(0.9)))
-        )
 
     if not batch_inputs:
         lengths = df.groupby(series_id_column).size()
@@ -123,7 +119,7 @@ def _build_infer_batches(
             "请检查输入数据长度或窗口配置。"
         )
 
-    return torch.stack(batch_inputs, dim=0), meta, window_stds, window_quantiles
+    return torch.stack(batch_inputs, dim=0), meta, window_stds
 
 
 def infer_single(config: TCNInferConfig) -> dict:
@@ -160,7 +156,7 @@ def infer_single(config: TCNInferConfig) -> dict:
     logging.info("推理数据加载完成（含历史上下文），行数：%d", len(df))
 
     context_cols = _ensure_context_columns(df, config.context_columns)
-    inputs, batch_meta, batch_stds, batch_quantiles = _build_infer_batches(
+    inputs, batch_meta, batch_stds = _build_infer_batches(
         df,
         config.series_id_column,
         config.time_column,
@@ -223,11 +219,6 @@ def infer_single(config: TCNInferConfig) -> dict:
         std = max(batch_stds[0] if batch_stds else 0.0, MIN_STD)
         lower = float(value) - 2 * std
         upper = float(value) + 2 * std
-    q10, q90 = batch_quantiles[0] if batch_quantiles else (float(value), float(value))
-    if not pd.notna(q10):
-        q10 = float(value)
-    if not pd.notna(q90):
-        q90 = float(value)
     return {
         "series_id": str(series_id),
         "last_ts": last_ts.isoformat() if hasattr(last_ts, "isoformat") else str(last_ts),
@@ -235,8 +226,6 @@ def infer_single(config: TCNInferConfig) -> dict:
         "prediction": float(value),
         "lower_bound": float(lower),
         "upper_bound": float(upper),
-        "q10_bound": float(q10),
-        "q90_bound": float(q90),
     }
 
 

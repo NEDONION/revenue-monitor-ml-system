@@ -107,8 +107,6 @@ def infer_single(config: TFTInferConfig) -> dict:
         "prediction": prediction,
         "lower_bound": lower,
         "upper_bound": upper,
-        "q10_bound": float(preds[0, target_step - 1, 0]),
-        "q90_bound": float(preds[0, target_step - 1, -1]),
     }
     config.output_path.parent.mkdir(parents=True, exist_ok=True)
     config.output_path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")

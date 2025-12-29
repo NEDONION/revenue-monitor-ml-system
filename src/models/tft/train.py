@@ -30,14 +30,30 @@ def train_tft(config_path: Path) -> None:
     known_reals = ensure_columns(df, config.known_reals)
     unknown_reals = ensure_columns(df, config.unknown_reals)
 
+    lengths = df.groupby(config.group_id_column).size()
+    min_len = int(lengths.min()) if not lengths.empty else 0
+    encoder_length = config.encoder_length
+    prediction_length = config.prediction_length
+    if min_len <= 1:
+        raise ValueError("样本序列过短，无法构建 TFT 训练样本。")
+    if min_len < (config.encoder_length + config.prediction_length):
+        prediction_length = min(config.prediction_length, max(1, min_len // 4))
+        encoder_length = min(config.encoder_length, max(1, min_len - prediction_length))
+        logging.warning(
+            "序列过短，已自动调整窗口：encoder=%d, prediction=%d (min_len=%d)",
+            encoder_length,
+            prediction_length,
+            min_len,
+        )
+
     # 组装训练数据集，包含静态特征与时间序列特征。
     dataset = TimeSeriesDataSet(
         df,
         time_idx="time_idx",
         target=config.target_column,
         group_ids=[config.group_id_column],
-        max_encoder_length=config.encoder_length,
-        max_prediction_length=config.prediction_length,
+        max_encoder_length=encoder_length,
+        max_prediction_length=prediction_length,
         static_categoricals=static_categoricals,
         time_varying_known_reals=["time_idx"] + known_reals,
         time_varying_unknown_reals=unknown_reals,
@@ -73,8 +89,8 @@ def train_tft(config_path: Path) -> None:
 
     meta = {
         "quantiles": config.quantiles,
-        "encoder_length": config.encoder_length,
-        "prediction_length": config.prediction_length,
+        "encoder_length": encoder_length,
+        "prediction_length": prediction_length,
         "time_column": config.time_column,
         "target_column": config.target_column,
         "group_id_column": config.group_id_column,

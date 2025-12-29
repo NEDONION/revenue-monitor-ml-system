@@ -152,17 +152,13 @@ export default function App() {
                   const prediction = Number(data.prediction ?? 0);
                   const lower = Number.isFinite(data.lower_bound) ? Number(data.lower_bound) : prediction;
                   const upper = Number.isFinite(data.upper_bound) ? Number(data.upper_bound) : prediction;
-                  const q10 = Number.isFinite(data.q10_bound) ? Number(data.q10_bound) : prediction;
-                  const q90 = Number.isFinite(data.q90_bound) ? Number(data.q90_bound) : prediction;
                   setInferResult({
                     series_id: String(data.series_id ?? ""),
                     last_ts: String(data.last_ts ?? ""),
                     horizon_step: String(data.horizon_step ?? ""),
                     prediction: prediction.toFixed(4),
                     lower_bound: lower.toFixed(4),
-                    upper_bound: upper.toFixed(4),
-                    q10_bound: q10.toFixed(4),
-                    q90_bound: q90.toFixed(4)
+                    upper_bound: upper.toFixed(4)
                   });
                 })
                 .catch(() => {});
@@ -203,17 +199,13 @@ export default function App() {
         const prediction = Number(data.prediction ?? 0);
         const lower = Number.isFinite(data.lower_bound) ? Number(data.lower_bound) : prediction;
         const upper = Number.isFinite(data.upper_bound) ? Number(data.upper_bound) : prediction;
-        const q10 = Number.isFinite(data.q10_bound) ? Number(data.q10_bound) : prediction;
-        const q90 = Number.isFinite(data.q90_bound) ? Number(data.q90_bound) : prediction;
         setInferResult({
           series_id: String(data.series_id ?? ""),
           last_ts: String(data.last_ts ?? ""),
           horizon_step: String(data.horizon_step ?? ""),
           prediction: prediction.toFixed(4),
           lower_bound: lower.toFixed(4),
-          upper_bound: upper.toFixed(4),
-          q10_bound: q10.toFixed(4),
-          q90_bound: q90.toFixed(4)
+          upper_bound: upper.toFixed(4)
         });
       })
       .catch(() => {});
@@ -234,17 +226,13 @@ export default function App() {
         const prediction = Number(data.prediction ?? 0);
         const lower = Number.isFinite(data.lower_bound) ? Number(data.lower_bound) : prediction;
         const upper = Number.isFinite(data.upper_bound) ? Number(data.upper_bound) : prediction;
-        const q10 = Number.isFinite(data.q10_bound) ? Number(data.q10_bound) : prediction;
-        const q90 = Number.isFinite(data.q90_bound) ? Number(data.q90_bound) : prediction;
         setInferResult({
           series_id: String(data.series_id ?? ""),
           last_ts: String(data.last_ts ?? ""),
           horizon_step: String(data.horizon_step ?? ""),
           prediction: prediction.toFixed(4),
           lower_bound: lower.toFixed(4),
-          upper_bound: upper.toFixed(4),
-          q10_bound: q10.toFixed(4),
-          q90_bound: q90.toFixed(4)
+          upper_bound: upper.toFixed(4)
         });
         setHint("推理完成");
         return;
@@ -434,14 +422,6 @@ export default function App() {
                   <div>
                     <span>上界</span>
                     <strong>{inferResult.upper_bound}</strong>
-                  </div>
-                  <div>
-                    <span>分位下界 (P10)</span>
-                    <strong>{inferResult.q10_bound}</strong>
-                  </div>
-                  <div>
-                    <span>分位上界 (P90)</span>
-                    <strong>{inferResult.q90_bound}</strong>
                   </div>
                 </div>
               )}

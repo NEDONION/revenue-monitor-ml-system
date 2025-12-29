@@ -11,7 +11,7 @@ from src.eval.tcn_eval import evaluate_tcn  # noqa: E402
 
 def main() -> None:
     # 评估入口，默认读取 TCN 评估配置。
-    evaluate_tcn(Path("configs/tcn_eval.json"))
+    evaluate_tcn(Path("configs/tcn/eval.json"))
 
 
 if __name__ == "__main__":

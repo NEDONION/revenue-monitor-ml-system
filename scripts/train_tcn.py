@@ -11,7 +11,7 @@ from src.training.tcn import train_tcn  # noqa: E402
 
 def main() -> None:
     # 训练入口，默认读取 TCN 配置。
-    train_tcn(Path("configs/tcn_training.json"))
+    train_tcn(Path("configs/tcn/train.json"))
 
 
 if __name__ == "__main__":
